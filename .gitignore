@@ -1,0 +1,7 @@
+# 构建产物
+android/build/
+android/keystore/
+ghx.apk
+# Python 缓存
+**/__pycache__/
+*.pyc

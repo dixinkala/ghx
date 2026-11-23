@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# GitHub 加速器启动器：任意目录可用，自动定位 ghxkit 包
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec env PYTHONPATH="$DIR${PYTHONPATH:+:$PYTHONPATH}" python3 -m ghxkit "$@"
