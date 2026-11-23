@@ -5,3 +5,4 @@ ghx.apk
 # Python 缓存
 **/__pycache__/
 *.pyc
+*.idsig
