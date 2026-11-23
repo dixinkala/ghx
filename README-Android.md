@@ -2,6 +2,8 @@
 
 原生 APK，37 KB，装上即用：不需要 root、不需要 Python、不依赖 proot 或任何后台服务。
 
+安装包：[Releases](https://github.com/dixinkala/ghx/releases) 直接下载 `ghx.apk`（最新 v2.15，45 KB）。
+
 产物：`android/ghx.apk`（包名 `com.ghx.accel`，minSdk 29 / targetSdk 34，当前版本 2.14）
 
 ## 四个功能
