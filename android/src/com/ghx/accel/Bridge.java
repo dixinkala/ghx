@@ -61,6 +61,7 @@ public class Bridge {
             case "download": return download(p.getString("url"));
             case "cancel": Downloader.requestCancel(); return new JSONObject().put("ok", true);
             case "health": return health();
+            case "domain": return setDomain(p.getString("host"), p.optBoolean("on", true));
             case "read": return read(p.getString("url"));
             case "vpn": return vpn(p.optBoolean("on", false), p.optString("id"));
             default: throw new IllegalArgumentException("未知操作 " + action);
@@ -118,8 +119,16 @@ public class Bridge {
         }
         o.put("mirrors", ms);
         JSONObject ips = new JSONObject();
-        for (Map.Entry<String, String> e : DnsConfig.snapshot().entrySet()) ips.put(e.getKey(), e.getValue());
+        JSONArray doms = new JSONArray();
+        for (String host : DnsConfig.TRACKED) {
+            String ip = DnsConfig.snapshot().get(host);
+            JSONObject d = new JSONObject().put("host", host)
+                    .put("enabled", DnsConfig.isEnabled(host));
+            if (ip != null) { ips.put(host, ip); d.put("ip", ip); }
+            doms.put(d);
+        }
         o.put("ips", ips);
+        o.put("domains", doms);
         if (DnsVpn.isRunning()) {
             String want = DnsConfig.get("github.com");
             // 每 5 分钟顺手探一次：IP 失效就自动换，换不到就标记直连不可用
@@ -164,7 +173,9 @@ public class Bridge {
 
     private JSONObject optimizeIps() throws Exception {
         JSONObject ips = new JSONObject();
-        for (String host : DnsConfig.TRACKED) {
+        java.util.List<String> enabled = DnsConfig.enabledHosts();
+        if (enabled.isEmpty()) throw new Exception("请至少勾选一个要加速的域名");
+        for (String host : enabled) {
             List<IpPicker.Hit> hits = IpPicker.best(host, 1);
             if (!hits.isEmpty()) {
                 DnsConfig.save(act, host, hits.get(0).ip);
@@ -178,10 +189,27 @@ public class Bridge {
     }
 
     /** 直连可达性：当前 IP 还通就直接返回，不通就重选；全都不通则报错。 */
+    private JSONObject setDomain(String host, boolean on) throws Exception {
+        if (!java.util.Arrays.asList(DnsConfig.TRACKED).contains(host)) {
+            throw new Exception("未知域名: " + host);
+        }
+        DnsConfig.setEnabled(act, host, on);
+        if (on && DnsConfig.get(host) == null) {
+            java.util.List<IpPicker.Hit> hits = IpPicker.best(host, 1);
+            if (!hits.isEmpty()) DnsConfig.save(act, host, hits.get(0).ip);
+        }
+        return new JSONObject().put("ok", true).put("host", host).put("enabled", on);
+    }
+
     private JSONObject health() throws Exception {
-        String[] hosts = {"github.com", "store.steampowered.com"};
+        java.util.List<String> enabled = DnsConfig.enabledHosts();
+        java.util.List<String> hosts = new java.util.ArrayList<>();
+        for (String h : new String[]{"github.com", "store.steampowered.com"}) {
+            if (enabled.contains(h)) hosts.add(h);
+        }
+        if (hosts.isEmpty()) hosts.add("github.com");
         JSONObject healed = new JSONObject();
-        boolean githubOk = false;
+        boolean githubOk = !enabled.contains("github.com");
         for (String host : hosts) {
             String cur = DnsConfig.get(host);
             if (cur != null && IpPicker.probe(host, cur, 3500).ok) {

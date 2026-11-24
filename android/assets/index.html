@@ -115,6 +115,8 @@ html[data-theme="light"] .switch .pwr{stroke:#7a8796}
 .item .k{color:var(--fg)}
 .item .v{color:var(--dim);font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
 .item .empty{color:var(--dim);font-size:12.5px}
+.dom{gap:10px;cursor:pointer}
+.dom input[type=checkbox]{width:20px;height:20px;flex:none;accent-color:#1f6feb;margin:0}
 
 .mirrors{margin-top:10px}
 .mirror{display:grid;grid-template-columns:1fr 64px;gap:8px;align-items:center;padding:6px 0}
@@ -152,7 +154,7 @@ footer{margin:22px 4px 0;font-size:11.5px;color:var(--dim);opacity:.85;line-heig
     <div><h1>GitHub 加速器</h1><p>原生运行 · 免 root · 国内网络</p></div>
   </div>
   <div class="hero-right">
-    <span class="ver">2.17</span>
+    <span class="ver">2.18</span>
     <button id="theme" aria-label="切换主题"></button>
   </div>
 </header>
@@ -193,8 +195,9 @@ footer{margin:22px 4px 0;font-size:11.5px;color:var(--dim);opacity:.85;line-heig
 </section>
 
 <section class="card">
-  <h2>优选 IP</h2>
-  <button class="primary wide" id="ipBtn">开始测速优选</button>
+  <h2>加速域名（只接管勾选的）</h2>
+  <div id="domains" class="list"></div>
+  <button class="primary wide" id="ipBtn">测速并优选已勾选域名</button>
   <div id="ips" class="list"></div>
   <div class="hint">优先测一次；Steam 社区（steamcommunity.com）是 SNI 阻断，DNS 加速对它无效。</div>
 </section>
@@ -330,7 +333,7 @@ async function refreshState() {
     const on = !!s.vpn;
     if (!swBusy) setSw(on ? 'on' : 'off');
     if (s.mirrors && s.mirrors.length) showMirrors(s.mirrors);
-    if (s.ips && Object.keys(s.ips).length) showIps(s.ips);
+    if (s.domains) showDomains(s.domains);
     if (s.healed) window.__ghxNotice('原 IP 已失效，自动切换到：' + s.healed);
     if (s.directDown && !window.__ddShown) {
       window.__ddShown = true;
@@ -364,6 +367,23 @@ function showMirrors(list) {
   }).join('');
 }
 
+function showDomains(list) {
+  $('#domains').innerHTML = list.map(d => `
+    <label class="item dom">
+      <input type="checkbox" data-host="${esc(d.host)}" ${d.enabled ? 'checked' : ''}>
+      <span class="k">${esc(d.host)}</span>
+      <span class="v">${d.ip ? esc(d.ip) : '未优选'}</span>
+    </label>`).join('');
+  const boxes = $('#domains').querySelectorAll('input[type=checkbox]');
+  for (const cb of boxes) {
+    cb.onchange = async () => {
+      try { await call('domain', {host: cb.dataset.host, on: cb.checked}); }
+      catch (e) { cb.checked = !cb.checked; window.__ghxNotice(e.message); }
+      refreshState();
+    };
+  }
+}
+
 function showIps(ips) {
   const keys = Object.keys(ips);
   $('#ips').innerHTML = keys.length ? keys.map(h =>
@@ -373,7 +393,7 @@ function showIps(ips) {
 
 $('#ipBtn').onclick = async () => {
   const b = $('#ipBtn'); b.disabled = true; b.textContent = '测速中…';
-  try { const r = await call('ips'); showIps(r.ips || {}); }
+  try { const r = await call('ips'); showIps(r.ips || {}); refreshState(); }
   catch (e) { $('#ips').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
   finally { b.disabled = false; b.textContent = '开始测速优选'; }
 };
@@ -427,7 +447,7 @@ $('#sw').onclick = async () => {
     const st = await call('state');
     if (!st.ips || !Object.keys(st.ips).length) {
       window.__ghxNotice('正在优选 IP，稍等…');
-      try { const r = await call('ips'); showIps(r.ips || {}); } catch (e) { }
+      try { const r = await call('ips'); showIps(r.ips || {}); refreshState(); } catch (e) { }
     }
     // 开之前先确认直连可达；不可达就别开，免得白开
     const h = await call('health');
