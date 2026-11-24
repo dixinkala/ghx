@@ -91,7 +91,8 @@ public final class IpPicker {
             byte[] buf = new byte[2048];
             int n = in.read(buf);
             h.ms = System.currentTimeMillis() - t0;
-            h.ok = n > 0 && (buf[9] == '2' || buf[9] == '3');
+            // 收到任何 HTTP 响应就说明可达；API 根路径常见 404，不能因此判死
+            h.ok = n > 0 && new String(buf, 0, Math.min(n, 12), "ISO-8859-1").startsWith("HTTP/");
             if (!h.ok) h.error = n <= 0 ? "无响应" : "HTTP 异常";
             s.close();
         } catch (Exception e) {
