@@ -62,6 +62,7 @@ public class Bridge {
             case "cancel": Downloader.requestCancel(); return new JSONObject().put("ok", true);
             case "health": return health();
             case "domain": return setDomain(p.getString("host"), p.optBoolean("on", true));
+            case "domains": return setDomains(p.optJSONArray("hosts"), p.optBoolean("on", true));
             case "read": return read(p.getString("url"));
             case "vpn": return vpn(p.optBoolean("on", false), p.optString("id"));
             default: throw new IllegalArgumentException("未知操作 " + action);
@@ -199,6 +200,22 @@ public class Bridge {
             if (!hits.isEmpty()) DnsConfig.save(act, host, hits.get(0).ip);
         }
         return new JSONObject().put("ok", true).put("host", host).put("enabled", on);
+    }
+
+    /** 整组勾选 / 取消；勾上但还没 IP 的顺手优选一次。 */
+    private JSONObject setDomains(JSONArray hosts, boolean on) throws Exception {
+        if (hosts == null) throw new Exception("缺少 hosts");
+        java.util.List<String> all = java.util.Arrays.asList(DnsConfig.TRACKED);
+        for (int i = 0; i < hosts.length(); i++) {
+            String host = hosts.optString(i);
+            if (!all.contains(host)) continue;
+            DnsConfig.setEnabled(act, host, on);
+            if (on && DnsConfig.get(host) == null) {
+                java.util.List<IpPicker.Hit> hits = IpPicker.best(host, 1);
+                if (!hits.isEmpty()) DnsConfig.save(act, host, hits.get(0).ip);
+            }
+        }
+        return new JSONObject().put("ok", true);
     }
 
     private JSONObject health() throws Exception {

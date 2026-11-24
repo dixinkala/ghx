@@ -116,6 +116,16 @@ html[data-theme="light"] .switch .pwr{stroke:#7a8796}
 .item .v{color:var(--dim);font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
 .item .empty{color:var(--dim);font-size:12.5px}
 .dom{gap:10px;cursor:pointer}
+.group{border-bottom:1px solid var(--line);padding:4px 0}
+.group:last-child{border-bottom:0}
+.ghead{display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;user-select:none}
+.ghead .gname{font-weight:600;font-size:14px}
+.ghead .gcount{margin-left:auto;color:var(--dim);font-size:12px;font-variant-numeric:tabular-nums}
+.ghead .arrow{color:var(--dim);font-size:12px;transition:transform .18s ease}
+.ghead .arrow.open{transform:rotate(180deg)}
+.ghead input[type=checkbox]{width:20px;height:20px;flex:none;accent-color:#1f6feb;margin:0}
+.gbody{padding:2px 0 6px}
+.gbody .item{padding-left:30px}
 .dom input[type=checkbox]{width:20px;height:20px;flex:none;accent-color:#1f6feb;margin:0}
 
 .mirrors{margin-top:10px}
@@ -154,7 +164,7 @@ footer{margin:22px 4px 0;font-size:11.5px;color:var(--dim);opacity:.85;line-heig
     <div><h1>GitHub 加速器</h1><p>原生运行 · 免 root · 国内网络</p></div>
   </div>
   <div class="hero-right">
-    <span class="ver">2.18</span>
+    <span class="ver">2.19</span>
     <button id="theme" aria-label="切换主题"></button>
   </div>
 </header>
@@ -367,17 +377,65 @@ function showMirrors(list) {
   }).join('');
 }
 
+const GROUPS = [
+  { name: 'GitHub', hosts: ['github.com', 'api.github.com', 'codeload.github.com'] },
+  { name: 'Steam', hosts: ['store.steampowered.com', 'api.steampowered.com', 'media.steampowered.com'] }
+];
+const openGroups = new Set();
+
 function showDomains(list) {
-  $('#domains').innerHTML = list.map(d => `
-    <label class="item dom">
-      <input type="checkbox" data-host="${esc(d.host)}" ${d.enabled ? 'checked' : ''}>
-      <span class="k">${esc(d.host)}</span>
-      <span class="v">${d.ip ? esc(d.ip) : '未优选'}</span>
-    </label>`).join('');
-  const boxes = $('#domains').querySelectorAll('input[type=checkbox]');
-  for (const cb of boxes) {
+  const byHost = {};
+  list.forEach(d => { byHost[d.host] = d; });
+  $('#domains').innerHTML = GROUPS.map(g => {
+    const ds = g.hosts.map(h => byHost[h]).filter(Boolean);
+    const on = ds.filter(d => d.enabled).length;
+    const open = openGroups.has(g.name);
+    return `<div class="group">
+      <div class="ghead" data-group="${g.name}">
+        <input type="checkbox" data-gcheck="${g.name}">
+        <span class="gname">${g.name}</span>
+        <span class="gcount">${on}/${ds.length}</span>
+        <span class="arrow${open ? ' open' : ''}">▾</span>
+      </div>
+      <div class="gbody"${open ? '' : ' style="display:none"'}>
+        ${ds.map(d => `<label class="item dom">
+          <input type="checkbox" data-host="${esc(d.host)}" ${d.enabled ? 'checked' : ''}>
+          <span class="k">${esc(d.host)}</span>
+          <span class="v">${d.ip ? esc(d.ip) : '未优选'}</span>
+        </label>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  // 组勾选框：全选 / 全不选 / 半选
+  for (const g of GROUPS) {
+    const box = $('#domains').querySelector(`input[data-gcheck="${g.name}"]`);
+    const ds = g.hosts.map(h => byHost[h]).filter(Boolean);
+    const on = ds.filter(d => d.enabled).length;
+    box.checked = on === ds.length;
+    box.indeterminate = on > 0 && on < ds.length;
+    box.onchange = async () => {
+      const want = box.checked;
+      box.disabled = true;
+      try { await call('domains', { hosts: g.hosts, on: want }); }
+      catch (e) { window.__ghxNotice(e.message); }
+      box.disabled = false;
+      refreshState();
+    };
+  }
+  // 展开 / 收起
+  for (const head of $('#domains').querySelectorAll('.ghead')) {
+    head.onclick = (ev) => {
+      if (ev.target.tagName === 'INPUT') return;
+      const name = head.dataset.group;
+      if (openGroups.has(name)) openGroups.delete(name); else openGroups.add(name);
+      showDomains(list);
+    };
+  }
+  // 单个域名
+  for (const cb of $('#domains').querySelectorAll('input[data-host]')) {
     cb.onchange = async () => {
-      try { await call('domain', {host: cb.dataset.host, on: cb.checked}); }
+      try { await call('domain', { host: cb.dataset.host, on: cb.checked }); }
       catch (e) { cb.checked = !cb.checked; window.__ghxNotice(e.message); }
       refreshState();
     };
