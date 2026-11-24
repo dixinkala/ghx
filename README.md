@@ -100,3 +100,7 @@ ghxkit/cli.py       命令行入口
 或 `ghx git undo` 后改回官方地址。
 
 **想彻底卸载？** `ghx hosts restore`，删掉 `/usr/local/bin/ghx` 软链和本项目目录即可。
+
+## 许可证
+
+[MIT](LICENSE) © 2026 dixinkala
