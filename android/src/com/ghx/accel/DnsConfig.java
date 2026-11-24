@@ -41,6 +41,13 @@ public final class DnsConfig {
         return ENABLED.contains(host);
     }
 
+    /** 清掉某个域名的 IP：DNS 就不再接管它，避免拿死 IP 去应答。 */
+    public static synchronized void clear(Context c, String host) {
+        MAP.remove(host);
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .remove("ip_" + host).apply();
+    }
+
     public static synchronized void setEnabled(Context c, String host, boolean on) {
         if (on) ENABLED.add(host); else ENABLED.remove(host);
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()

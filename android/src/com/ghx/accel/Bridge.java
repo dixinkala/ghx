@@ -31,6 +31,8 @@ public class Bridge {
     private final ExecutorService pool = Executors.newFixedThreadPool(4);
     private volatile List<Mirrors.Node> ranked = new ArrayList<>();
     private volatile long lastHealth = 0;
+    /** 最近一次探测确认不可达的域名（内存态，用于界面标记）。 */
+    private final java.util.Set<String> downHosts = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
 
     public Bridge(MainActivity act) {
         this.act = act;
@@ -124,7 +126,8 @@ public class Bridge {
         for (String host : DnsConfig.TRACKED) {
             String ip = DnsConfig.snapshot().get(host);
             JSONObject d = new JSONObject().put("host", host)
-                    .put("enabled", DnsConfig.isEnabled(host));
+                    .put("enabled", DnsConfig.isEnabled(host))
+                    .put("down", downHosts.contains(host));
             if (ip != null) { ips.put(host, ip); d.put("ip", ip); }
             doms.put(d);
         }
@@ -176,17 +179,26 @@ public class Bridge {
         JSONObject ips = new JSONObject();
         java.util.List<String> enabled = DnsConfig.enabledHosts();
         if (enabled.isEmpty()) throw new Exception("请至少勾选一个要加速的域名");
+        JSONArray unreachable = new JSONArray();
         for (String host : enabled) {
             List<IpPicker.Hit> hits = IpPicker.best(host, 1);
             if (!hits.isEmpty()) {
                 DnsConfig.save(act, host, hits.get(0).ip);
+                downHosts.remove(host);
                 ips.put(host, hits.get(0).ip);
+            } else {
+                // 全部候选不可达：清掉旧 IP 并标记，别继续拿死 IP 应答
+                DnsConfig.clear(act, host);
+                downHosts.add(host);
+                unreachable.put(host);
             }
         }
         if (ips.length() == 0) {
             throw new Exception("当前网络无法直连 GitHub：候选 IP 全部超时，建议用应用内下载 / 只读浏览");
         }
-        return new JSONObject().put("ok", true).put("ips", ips);
+        JSONObject o = new JSONObject().put("ok", true).put("ips", ips);
+        if (unreachable.length() > 0) o.put("unreachable", unreachable);
+        return o;
     }
 
     /** 直连可达性：当前 IP 还通就直接返回，不通就重选；全都不通则报错。 */
@@ -212,7 +224,12 @@ public class Bridge {
             DnsConfig.setEnabled(act, host, on);
             if (on && DnsConfig.get(host) == null) {
                 java.util.List<IpPicker.Hit> hits = IpPicker.best(host, 1);
-                if (!hits.isEmpty()) DnsConfig.save(act, host, hits.get(0).ip);
+                if (!hits.isEmpty()) {
+                    DnsConfig.save(act, host, hits.get(0).ip);
+                    downHosts.remove(host);
+                } else {
+                    downHosts.add(host);
+                }
             }
         }
         return new JSONObject().put("ok", true);
@@ -236,8 +253,12 @@ public class Bridge {
             java.util.List<IpPicker.Hit> hits = IpPicker.best(host, 1);
             if (!hits.isEmpty()) {
                 DnsConfig.save(act, host, hits.get(0).ip);
+                downHosts.remove(host);
                 healed.put(host, hits.get(0).ip);
                 if (host.equals("github.com")) githubOk = true;
+            } else {
+                DnsConfig.clear(act, host);
+                downHosts.add(host);
             }
         }
         if (!githubOk) {
