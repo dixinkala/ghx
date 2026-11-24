@@ -30,6 +30,7 @@ public class Bridge {
     private final MainActivity act;
     private final ExecutorService pool = Executors.newFixedThreadPool(4);
     private volatile List<Mirrors.Node> ranked = new ArrayList<>();
+    private volatile long lastHealth = 0;
 
     public Bridge(MainActivity act) {
         this.act = act;
@@ -59,6 +60,7 @@ public class Bridge {
             case "resolve": return resolve(p.getString("url"));
             case "download": return download(p.getString("url"));
             case "cancel": Downloader.requestCancel(); return new JSONObject().put("ok", true);
+            case "health": return health();
             case "read": return read(p.getString("url"));
             case "vpn": return vpn(p.optBoolean("on", false), p.optString("id"));
             default: throw new IllegalArgumentException("未知操作 " + action);
@@ -119,10 +121,24 @@ public class Bridge {
         for (Map.Entry<String, String> e : DnsConfig.snapshot().entrySet()) ips.put(e.getKey(), e.getValue());
         o.put("ips", ips);
         if (DnsVpn.isRunning()) {
+            String want = DnsConfig.get("github.com");
+            // 每 5 分钟顺手探一次：IP 失效就自动换，换不到就标记直连不可用
+            if (want != null && System.currentTimeMillis() - lastHealth > 300000) {
+                lastHealth = System.currentTimeMillis();
+                if (!IpPicker.probe("github.com", want, 3500).ok) {
+                    java.util.List<IpPicker.Hit> hits = IpPicker.best("github.com", 1);
+                    if (!hits.isEmpty()) {
+                        want = hits.get(0).ip;
+                        DnsConfig.save(act, "github.com", want);
+                        o.put("healed", want);
+                    } else {
+                        o.put("directDown", true);
+                    }
+                }
+            }
             try {
                 String ip = java.net.InetAddress.getByName("github.com").getHostAddress();
                 o.put("resolved", ip);
-                String want = DnsConfig.get("github.com");
                 if (want != null && !want.equals(ip)) o.put("resolvedStale", true);
             } catch (Exception ignored) { }
         }
@@ -154,7 +170,27 @@ public class Bridge {
                 ips.put(host, hits.get(0).ip);
             }
         }
+        if (ips.length() == 0) {
+            throw new Exception("当前网络无法直连 GitHub：候选 IP 全部超时，建议用应用内下载 / 只读浏览");
+        }
         return new JSONObject().put("ok", true).put("ips", ips);
+    }
+
+    /** 直连可达性：当前 IP 还通就直接返回，不通就重选；全都不通则报错。 */
+    private JSONObject health() throws Exception {
+        String host = "github.com";
+        String cur = DnsConfig.get(host);
+        if (cur != null && IpPicker.probe(host, cur, 4000).ok) {
+            return new JSONObject().put("ok", true).put("ip", cur);
+        }
+        java.util.List<IpPicker.Hit> hits = IpPicker.best(host, 1);
+        if (!hits.isEmpty()) {
+            String ip = hits.get(0).ip;
+            DnsConfig.save(act, host, ip);
+            return new JSONObject().put("ok", true).put("ip", ip).put("healed", true);
+        }
+        return new JSONObject().put("ok", false)
+                .put("error", "当前网络无法直连 GitHub（候选 IP 全部超时），请改用应用内下载 / 只读浏览");
     }
 
     private JSONObject resolve(String url) throws Exception {

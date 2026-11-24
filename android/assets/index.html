@@ -152,7 +152,7 @@ footer{margin:22px 4px 0;font-size:11.5px;color:var(--dim);opacity:.85;line-heig
     <div><h1>GitHub 加速器</h1><p>原生运行 · 免 root · 国内网络</p></div>
   </div>
   <div class="hero-right">
-    <span class="ver">2.15</span>
+    <span class="ver">2.16</span>
     <button id="theme" aria-label="切换主题"></button>
   </div>
 </header>
@@ -331,6 +331,12 @@ async function refreshState() {
     if (!swBusy) setSw(on ? 'on' : 'off');
     if (s.mirrors && s.mirrors.length) showMirrors(s.mirrors);
     if (s.ips && Object.keys(s.ips).length) showIps(s.ips);
+    if (s.healed) window.__ghxNotice('原 IP 已失效，自动切换到：' + s.healed);
+    if (s.directDown && !window.__ddShown) {
+      window.__ddShown = true;
+      window.__ghxNotice('当前网络无法直连 GitHub，DNS 加速不会生效，请用应用内下载 / 只读浏览');
+    }
+    if (!s.directDown) window.__ddShown = false;
     const rs = $('#resolved');
     if (s.vpn && s.resolved) {
       rs.innerHTML = `解析 <b>github.com → ${esc(s.resolved)}</b>` +
@@ -423,6 +429,15 @@ $('#sw').onclick = async () => {
       window.__ghxNotice('正在优选 IP，稍等…');
       try { const r = await call('ips'); showIps(r.ips || {}); } catch (e) { }
     }
+    // 开之前先确认直连可达；不可达就别开，免得白开
+    const h = await call('health');
+    if (!h || !h.ok) {
+      setSw('off');
+      window.__ghxNotice((h && h.error) || '当前网络无法直连 GitHub，DNS 加速不会生效');
+      swBusy = false;
+      return;
+    }
+    if (h.healed) window.__ghxNotice('已自动切换到可用 IP：' + h.ip);
     const r = await call('vpn', {on: true});
     const ok = await waitVpn(true, 12000);
     setSw(ok ? 'on' : 'off');
