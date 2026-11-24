@@ -9,7 +9,8 @@ import java.util.Map;
 /** DNS 加速用的 域名 → IP 映射（持久化在 SharedPreferences）。 */
 public final class DnsConfig {
 
-    public static final String[] TRACKED = {"github.com", "api.github.com", "codeload.github.com"};
+    public static final String[] TRACKED = {"github.com", "api.github.com", "codeload.github.com",
+            "store.steampowered.com", "api.steampowered.com", "media.steampowered.com"};
     private static final String PREFS = "ghx";
     private static final Map<String, String> MAP = new LinkedHashMap<>();
 

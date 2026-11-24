@@ -29,6 +29,13 @@ public final class IpPicker {
              "20.205.243.168", "20.200.245.245", "20.27.177.116", "140.82.112.5"},
             {"codeload.github.com",
              "20.6.7.16", "20.247.166.65", "20.200.245.246", "20.205.243.165"},
+            // Steam：商店 / API / 媒体（社区 steamcommunity.com 是 SNI 阻断，DNS 救不了）
+            {"store.steampowered.com",
+             "23.41.38.92", "23.53.170.108", "23.15.142.182", "23.48.104.107"},
+            {"api.steampowered.com",
+             "184.24.154.164", "184.24.154.173", "184.24.154.166"},
+            {"media.steampowered.com",
+             "23.206.203.56", "23.206.203.50"},
     };
 
     public static final class Hit {
