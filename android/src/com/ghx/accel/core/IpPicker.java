@@ -83,17 +83,20 @@ public final class IpPicker {
                     || !hostMatches((java.security.cert.X509Certificate) chain[0], host)) {
                 throw new java.security.cert.CertificateException("证书域名不符");
             }
-            OutputStream os = s.getOutputStream();
-            os.write(("GET / HTTP/1.1\r\nHost: " + host + "\r\nUser-Agent: ghx\r\n"
-                    + "Accept-Encoding: identity\r\nConnection: close\r\n\r\n").getBytes("ASCII"));
-            os.flush();
-            InputStream in = s.getInputStream();
-            byte[] buf = new byte[2048];
-            int n = in.read(buf);
+            // 握手 + 证书校验通过就算可达：页面慢不等于节点不可用
+            h.ok = true;
             h.ms = System.currentTimeMillis() - t0;
-            // 收到任何 HTTP 响应就说明可达；API 根路径常见 404，不能因此判死
-            h.ok = n > 0 && new String(buf, 0, Math.min(n, 12), "ISO-8859-1").startsWith("HTTP/");
-            if (!h.ok) h.error = n <= 0 ? "无响应" : "HTTP 异常";
+            try {
+                OutputStream os = s.getOutputStream();
+                os.write(("GET / HTTP/1.1\r\nHost: " + host + "\r\nUser-Agent: ghx\r\n"
+                        + "Accept-Encoding: identity\r\nConnection: close\r\n\r\n").getBytes("ASCII"));
+                os.flush();
+                InputStream in = s.getInputStream();
+                byte[] buf = new byte[2048];
+                in.read(buf);
+            } catch (Exception ignored) {
+                // 读响应超时不影响"可达"的结论
+            }
             s.close();
         } catch (Exception e) {
             h.ms = System.currentTimeMillis() - t0;
